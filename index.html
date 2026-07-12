@@ -7656,6 +7656,22 @@
       details: get(1).trim()
     };
   }
+  function hasLineThroughStyle(style) {
+    return /text-decoration[^;]*line-through/i.test(style);
+  }
+  function cellIsStruckThrough(td, tdText) {
+    if (!tdText) return false;
+    if (hasLineThroughStyle(td.getAttribute("style") || "")) return true;
+    const descendants = td.querySelectorAll("*");
+    for (let i = 0; i < descendants.length; i++) {
+      const el = descendants[i];
+      if (hasLineThroughStyle(el.getAttribute("style") || "")) {
+        const elText = (el.textContent || "").trim();
+        if (elText && elText.length >= tdText.length * 0.9) return true;
+      }
+    }
+    return false;
+  }
   function parseHtmlRows(html) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const trs = Array.from(doc.querySelectorAll("tr"));
@@ -7663,7 +7679,8 @@
       (tr) => Array.from(tr.children).map((td) => {
         const style = td.getAttribute("style") || "";
         const m = style.match(/background-color:\s*([^;]+)/i);
-        return { text: (td.textContent || "").replace(/\s+/g, " ").trim(), bg: m ? m[1].trim() : null };
+        const text = (td.textContent || "").replace(/\s+/g, " ").trim();
+        return { text, bg: m ? m[1].trim() : null, struck: cellIsStruckThrough(td, text) };
       })
     );
   }
@@ -7777,6 +7794,16 @@
       if (isColumnHeaderCells(cellsText)) continue;
       const nonEmpty = cellsText.filter((c) => c.trim()).length;
       if (nonEmpty < 2) continue;
+      if (row.cellsStruck && row.cellsStruck.length) {
+        let struckNonEmpty = 0;
+        for (let i = 0; i < cellsText.length; i++) {
+          if (cellsText[i].trim() && row.cellsStruck[i]) struckNonEmpty++;
+        }
+        if (struckNonEmpty >= Math.ceil(nonEmpty / 2)) {
+          skippedCount++;
+          continue;
+        }
+      }
       const counts = {};
       for (const bg of row.cellsBg) {
         const rgb = parseColor(bg);
@@ -7865,7 +7892,8 @@
           const htmlRows = parseHtmlRows(html);
           rowsWithBg = htmlRows.map((r) => ({
             cellsText: r.map((c) => c.text),
-            cellsBg: r.map((c) => c.bg)
+            cellsBg: r.map((c) => c.bg),
+            cellsStruck: r.map((c) => c.struck)
           }));
           usedColor = true;
         } else if (text && text.trim()) {
@@ -7881,7 +7909,7 @@
           warn = true;
         } else {
           let msg = "\u2713 \u0420\u043E\u0437\u043F\u0456\u0437\u043D\u0430\u043D\u043E " + result.entries.length + " \u0430\u043A\u0442\u0443\u0430\u043B\u044C\u043D(\u0438\u0445) \u0437\u0430\u043F\u0438\u0441\u0456\u0432" + (usedColor ? " (\u043A\u043E\u043B\u0456\u0440 \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043E \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u043D\u043E)" : " (\u0431\u0435\u0437 \u043A\u043E\u043B\u044C\u043E\u0440\u0443 \u2014 \u043F\u0435\u0440\u0435\u0432\u0456\u0440\u0442\u0435 \u0442\u0438\u043F \u0432\u0440\u0443\u0447\u043D\u0443)") + ".";
-          if (result.skipped > 0) msg += " \u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043E " + result.skipped + " \u0432\u0456\u0434\u043F\u0440\u0430\u0446\u044C\u043E\u0432\u0430\u043D\u0438\u0445 (\u0432\u0456\u0434\u043C\u043E\u0432\u0430/\u0443\u0433\u043E\u0434\u0430).";
+          if (result.skipped > 0) msg += " \u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043E " + result.skipped + " \u0432\u0456\u0434\u043F\u0440\u0430\u0446\u044C\u043E\u0432\u0430\u043D\u0438\u0445 (\u0432\u0456\u0434\u043C\u043E\u0432\u0430/\u0443\u0433\u043E\u0434\u0430/\u0437\u0430\u043A\u0440\u0435\u0441\u043B\u0435\u043D\u043E).";
           statusText = msg;
           warn = !usedColor;
         }

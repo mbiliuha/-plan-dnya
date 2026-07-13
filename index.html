@@ -7708,7 +7708,9 @@
     const trimmed = details.trim();
     const anchorBase = fallbackAnchorISO || todayISO();
     const leadMatch = trimmed.match(/^(\d{1,2})[.\/](\d{1,2})(?:[.\/]\d{2,4})?(\s+(\d{1,2}):(\d{2}))?/);
-    if (!leadMatch) return null;
+    if (!leadMatch) {
+      return findDateTimeInSegments(trimmed, anchorBase);
+    }
     const day = parseInt(leadMatch[1], 10), month = parseInt(leadMatch[2], 10);
     const year = parseInt(anchorBase.split("-")[0], 10);
     let anchor = isoFromParts(year, month - 1, day);
